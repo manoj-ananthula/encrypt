@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:crypto="http://www.mulesoft.org/schema/mule/crypto" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/crypto http://www.mulesoft.org/schema/mule/crypto/current/mule-crypto.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="588ba34d-3625-4372-928c-ada834318aa3" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<crypto:pgp-config name="Crypto_Pgp" doc:name="Crypto Pgp" doc:id="fabf24c3-b27f-4374-9472-6116a0a03cef" publicKeyring="public_key.gpg" >
+		<crypto:pgp-key-infos >
+			<crypto:pgp-asymmetric-key-info keyId="1F655503" fingerprint="0CDAF344F4AE03FE2C1BAA163DA6DFB11F655503" />
+		</crypto:pgp-key-infos>
+	</crypto:pgp-config>
+	<crypto:pgp-config name="Crypto_Pgp1" doc:name="Crypto Pgp" doc:id="bf5848f4-4829-48ae-be28-ddacb3cefe9c" privateKeyring="private_key.gpg" >
+		<crypto:pgp-key-infos >
+			<crypto:pgp-asymmetric-key-info keyId="1F655503" fingerprint="0CDAF344F4AE03FE2C1BAA163DA6DFB11F655503" passphrase="Manoj@2409"/>
+		</crypto:pgp-key-infos>
+	</crypto:pgp-config>
+	<flow name="encryptFlow" doc:id="679a51c7-5d0a-4d7a-9bbf-d1acb58414c8" >
+		<http:listener doc:name="Listener" doc:id="d34b8c94-3aed-4364-9c79-5d2f39b3ca95" config-ref="HTTP_Listener_config" path="/encrypt"/>
+		<logger level="INFO" doc:name="Logger" doc:id="d5945cbb-4634-4e1d-9842-ea9ba98fadac" message="parent"/>
+		<ee:transform doc:name="Transform Message" doc:id="1d81decc-7ad3-448f-b582-a87e95d58af7" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+fun enc(i) = if(i !=null and !isEmpty(i)) Mule::lookup("encryptFlow1",i,300000) else i
+---
+{
+	"Name" : payload.name,
+	"City" : payload.city,
+	"Email" : enc(payload.email)
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="decryptFlow" doc:id="c470b53e-85be-4deb-8b45-d1f59946f43b">
+		<http:listener doc:name="Listener" doc:id="23e2e288-45e2-44c2-bcd2-fe6265474ff1" config-ref="HTTP_Listener_config" path="/decrypt" />
+		<logger level="INFO" doc:name="Logger" doc:id="0ab38a9d-c9f0-4f53-987d-1a4c8256c0a6" message="parent" />
+		<ee:transform doc:name="Transform Message" doc:id="f3b85545-6598-440e-bdc0-d6179b81d5f4">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+fun dec(i) = if(i !=null and !isEmpty(i)) Mule::lookup("decryptFlow2",i,30000) else i
+---
+{
+	"Name" : payload.Name,
+	"City" : payload.City,
+	"Email" : dec(payload.Email)
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="encryptFlow1" doc:id="1f649704-7704-4fcb-9412-23dd01c22f6b" >
+		<logger level="INFO" doc:name="Logger" doc:id="b619b9a5-0202-4350-840c-5e43430fdef5" message='#["Encryptions api"]'/>
+		<crypto:pgp-encrypt doc:name="Pgp encrypt" doc:id="a2e47728-c3bc-4b12-a221-7ae2103a5304" config-ref="Crypto_Pgp" keyId="1F655503"/>
+		<ee:transform doc:name="Transform Message" doc:id="b84b20d3-d674-4d19-a145-0f5c5ba09ec3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+import * from dw::core::Binaries
+---
+toBase64(payload as Binary)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="decryptFlow2" doc:id="a8f1160f-b69c-4465-9168-4f1620bae987" >
+		<ee:transform doc:name="Transform Message" doc:id="ceaa8c9a-b0ec-401d-9d9c-60d166111d71" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/octet-stream
+import * from dw::core::Binaries
+---
+fromBase64(payload as String)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<crypto:pgp-decrypt doc:name="Pgp decrypt" doc:id="c3478ad5-7615-4fa2-b39a-cfbb0fdf43f0" config-ref="Crypto_Pgp1"/>
+		<ee:transform doc:name="Transform Message1" doc:id="e28d608b-b257-4d71-bdaf-b4338a6fd839" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>
